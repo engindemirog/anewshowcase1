@@ -1,6 +1,7 @@
 # Testing
 
-> **Template — filled during bootstrap.**
+> Bootstrap'ta (2026-10-26) dolduruldu; proje kuralları "Frameworks & layout" ve "What must be
+> tested" altında, ANEW'in ortak kuralları değişmeden aşağıda.
 
 ## The contract
 - Every acceptance criterion maps to at least one test (criterion ↔ test map lives in the plan).
@@ -8,10 +9,36 @@
 - The whole suite runs inside `scripts/check` — one command, everywhere.
 
 ## Frameworks & layout
-<!-- Test framework(s), where tests live, naming pattern. -->
+| Seviye | Araç | Yer | Not |
+|---|---|---|---|
+| Birim | pytest | `tests/unit/` | Servis katmanı; veritabanı gerekiyorsa in-memory SQLite |
+| API | pytest + FastAPI `TestClient` | `tests/api/` | Process içi; sunucu başlatılmaz |
+| Mimari | import-linter (`[tool.importlinter]`, `pyproject.toml`) | — | Yasak bağımlılık 1–3 |
+| E2E (UI) | Playwright for Python (pytest-playwright), headless Chromium | `tests/e2e/` | `@pytest.mark.e2e`; tek worker |
+
+- Adlandırma: `test_<konu>.py`, `test_<davranış>`; iş kuralı testleri `test_br<n>_...`
+  (`docs/conventions.md`, Naming).
+- **Hızlı/tam ayrımı selector ile:** E2E testleri `@pytest.mark.e2e` taşır (`pyproject.toml`'da
+  marker kayıtlı, `--strict-markers`). `--fast` → `pytest -m "not e2e"`; full ek olarak
+  `pytest -m e2e`. Yeni bir test bu iki kümeden birine kendiliğinden düşer.
+- `pytest-xdist` kullanılmaz (paralel worker yok).
+- **Uygulama yaşam döngüsü (E2E):** sahibi tek bir pytest session fixture'ıdır
+  (`tests/e2e/conftest.py`). Uvicorn'u boş bir portta, geçici bir SQLite dosyasıyla alt süreç
+  olarak başlatır, hazır olmasını bekler; `finally` içinde (hata, timeout ve Ctrl+C dâhil)
+  durdurur, bekler ve dosyayı siler. Elle açılmış bir sunucuya güvenen test yazılmaz.
+- **Veri:** her test kendi veritabanıyla başlar (in-memory veya `tmp_path`); testler arası paylaşılan
+  durum ve sıra bağımlılığı yasak. Tarih bağımlı testler "bugün"ü enjekte edilen bir saatten alır,
+  sistem saatinden okumaz.
 
 ## What must be tested
-<!-- e.g. every business rule (BR-n), every boundary/forbidden dependency, critical flows E2E/smoke. -->
+- Her iş kuralı (BR-1…BR-9) için en az bir pozitif ve bir negatif birim testi.
+- Sınır değerler: BR-7 kıdem eşikleri (1., 5., 15. yıl dönümü — günü gününe), yaş eşikleri (18, 50),
+  BR-2 için hafta sonu ve resmî tatil içeren / yalnızca tatilden oluşan aralıklar, BR-3 için
+  uç uca değen ve bir gün çakışan aralıklar.
+- Her durum geçişi ve izin verilmeyen her geçiş; her geçişin `AuditEntry` ürettiği.
+- Yetki: her uç nokta için oturumsuz (401), yanlış rol (403) ve başkasının kaydı (404) durumları.
+- Hata gövdesi biçimi (`code`, `message`) ve 500'de iç detayın sızmadığı.
+- E2E kritik akışlar: talep oluşturma → İK onayı → bakiyenin düşmesi; ret; iptal ve bakiye iadesi.
 
 ## Protected-tests rule
 Weakening asserts, deleting, or skipping tests to reach green is forbidden. A red test triggers
